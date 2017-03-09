@@ -1,5 +1,6 @@
 package scripts;
 
+import com.sun.deploy.uitoolkit.impl.awt.AWTAppletAdapter;
 import org.tribot.api.Timing;
 import org.tribot.api2007.*;
 import org.tribot.api2007.types.*;
@@ -137,10 +138,11 @@ public class ChickenMaster9000 extends Script implements Painting{
         lootFeathers = gui.featherBox.isSelected();
         roundRobin = gui.roundRobin.isSelected();
         pureMode = gui.pureBox.isSelected();
+        AANIMATION = Integer.parseInt(gui.animationField.getText());
         if (roundRobin) {
             setStyle();
         }
-        println(lootFeathers+" "+roundRobin);
+        println("looting: " + lootFeathers+" round robin: "+roundRobin + " pure mode: " + pureMode + " Anim: "+ AANIMATION);
         startTime = System.currentTimeMillis();
         looted = 0;
         startLvls = getLvls();
@@ -299,7 +301,7 @@ public class ChickenMaster9000 extends Script implements Painting{
             Combat.selectIndex(3);
             sleep(500, 1000);
         }
-        if (!GameTab.TABS.INVENTORY.isOpen()) Inventory.open();
+        Inventory.open();
     }
 
     boolean needSwitch() {
@@ -380,6 +382,8 @@ class ChickenGUI extends JFrame implements ActionListener{
     JCheckBox featherBox;
     JCheckBox roundRobin;
     JCheckBox pureBox;
+    JLabel animationLabel;
+    JTextField animationField;
 
     boolean started;
 
@@ -400,12 +404,17 @@ class ChickenGUI extends JFrame implements ActionListener{
         roundRobin.setAlignmentX(0.5f);
         pureBox = new JCheckBox("Pure Mode");
         pureBox.setAlignmentX(0.5f);
+        animationLabel = new JLabel("Enter Animation");
+        animationField = new JTextField("386");
 
         panel.add(titleLabel);
         panel.add(featherBox);
         panel.add(roundRobin);
         panel.add(pureBox);
+        panel.add(animationLabel);
+        panel.add(animationField);
         panel.add(startButton);
+
 
         add(panel);
 
