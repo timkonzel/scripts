@@ -189,6 +189,7 @@ public class ChickenMaster9000 extends Script implements Painting{
             chicken.click("Attack Chicken");
             killed = false;
             animated = false;
+            wtf = 0;
             sleep(200);
         } else {
            // println("cannot find a chicken");
@@ -239,11 +240,17 @@ public class ChickenMaster9000 extends Script implements Painting{
             sleep(100);
         }
     }
-
+int wtf = 0;
     void sleepTillDeath() { // sleeps until our target is dead
-        RSCharacter target = Combat.getTargetEntity(); // search for our target
+        RSCharacter target = Combat.getTargetEntity();
+
         if (target == null) {
             sleep(200,400);
+
+            if (wtf > 15) {
+                killed = true;
+                animated = false;
+            }
             return;
         }
 
@@ -262,6 +269,7 @@ public class ChickenMaster9000 extends Script implements Painting{
                 if (r.nextInt(10) < 6) sleep(1500,3000); // random chance to wait for loot
                 return;
             }
+
             sleep(100,125);
         }
         animated = false;
