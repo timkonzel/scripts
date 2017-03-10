@@ -154,7 +154,7 @@ Random r = new Random();
     }
 
     RSGroundItem getLoot() {
-        RSGroundItem[] items = GroundItems.find("Cowhide");
+        RSGroundItem[] items = GroundItems.findNearest("Cowhide");
         RSTile me = Player.getPosition();
         for (RSGroundItem i : items) {
             if (i != null) {
@@ -262,6 +262,10 @@ Random r = new Random();
 
     boolean fight() {
         RSNPC cow = getCow();
+        RSTile me = Player.getPosition();
+        if (me.getX() < 3253 && me.getY() < 3273) {
+            WebWalking.walkTo(COWTILES[2]);
+        }
         if (cow == null) return false;
         if (!cow.isOnScreen()) {
             Random r = new Random();
