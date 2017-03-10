@@ -158,7 +158,7 @@ Random r = new Random();
         RSTile me = Player.getPosition();
         for (RSGroundItem i : items) {
             if (i != null) {
-                if (me.distanceTo(i) < 5) return i;
+                if (me.distanceTo(i) < 4) return i;
             }
         }
         return null;
@@ -168,9 +168,19 @@ Random r = new Random();
         RSNPC[] cows = NPCs.findNearest(COWS);
         RSTile me = Player.getPosition();
         for (RSNPC n : cows) {
-            if (n != null && !n.isInCombat() && me.distanceTo(n) < 10) return n;
+            if (canAttack(n)) return n;
         }
         return null;
+    }
+
+    boolean canAttack(RSNPC n) {
+        RSTile pos = n.getPosition();
+        if (n == null) return false;
+        if (n.isInCombat()) return false;
+        if (n.getAnimation() != -1) return false;
+        if (Player.getPosition().distanceTo(n) >= 10) return false;
+        if (pos.getX() < 3253 && pos.getY() < 3272) return false;
+        return true;
     }
 
     boolean needSwitch() {
@@ -329,7 +339,7 @@ Random r = new Random();
     void lootDelay() {
         int count = Inventory.getCount("Cowhide");
         for (int i = 0; i < 10; i++) {
-            if (Player.isMoving()) i--;
+            if (Player.isMoving()) i = 0;
             int change = Inventory.getCount("Cowhide") - count;
             if (change > 0) {
                 looted += change;
