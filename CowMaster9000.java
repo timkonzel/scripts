@@ -11,27 +11,32 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.math.RoundingMode;
+import java.text.DecimalFormat;
 import java.util.Random;
 
 /**
  * Created by tim on 2/22/2017.
  */
-@ScriptManifest(authors={"Master 9000"}, name = "Cow Master 9000", version = 0.01,category = "Combat", description = "kills cows in lumbridge")
+@ScriptManifest(authors={"Master 9000"}, name = "Cow Master 9000", version = 0.02,category = "Combat", description = "kills cows in lumbridge")
 public class CowMaster9000 extends Script implements Painting {
 RSTile[] COWTILES = new RSTile[4];
 RSTile BANKTILE;
 int[] COWS = {2805, 2806, 2807, 2808, 2809};
 
-double version = 0.01;
+double version = 0.02;
 
 int[] startLvls = new int[4];
 int[] startXps = new int[4];
 
+int AANIMATION, FOOD;
 boolean roundRobin, looting;
 
 long startTime, nextSwitch;
 
 int state;
+
+Random r = new Random();
 
 
     @Override
@@ -88,6 +93,8 @@ int state;
         startXps = getXps();
         looting = gui.lootBox.isSelected();
         roundRobin = gui.roundRobin.isSelected();
+        AANIMATION = Integer.parseInt(gui.animF.getText());
+        FOOD = Integer.parseInt(gui.foodF.getText());
 
         if (roundRobin) roundRobin();
         started = true;
@@ -132,7 +139,7 @@ int state;
     }
 
     boolean needBank() {
-        if (Inventory.isFull()) {
+        if (Inventory.isFull() || (Inventory.getCount(FOOD) == 0 && Player.getRSPlayer().getHealthPercent() < 0.5)) {
             return true;
         }
         return false;
@@ -151,14 +158,14 @@ int state;
         RSTile me = Player.getPosition();
         for (RSGroundItem i : items) {
             if (i != null) {
-                if (me.distanceTo(i) < 3) return i;
+                if (me.distanceTo(i) < 5) return i;
             }
         }
         return null;
     }
 
     RSNPC getCow() {
-        RSNPC[] cows = NPCs.find(COWS);
+        RSNPC[] cows = NPCs.findNearest(COWS);
         RSTile me = Player.getPosition();
         for (RSNPC n : cows) {
             if (n != null && !n.isInCombat() && me.distanceTo(n) < 10) return n;
@@ -179,6 +186,11 @@ int state;
         if (started) {
             long currentTime = System.currentTimeMillis();
             long timeRan = currentTime - startTime;
+            DecimalFormat df = new DecimalFormat("##.####");
+            DecimalFormat df2 = new DecimalFormat("####.##");
+            df.setRoundingMode(RoundingMode.DOWN);
+            double hoursRan2 = timeRan / 3600000.0;
+            double hoursRan = Double.parseDouble(df.format(hoursRan2));
             graphics.setColor(bgColor);
             graphics.draw3DRect(6, 342, 490, 131, true);
             graphics.fill3DRect(6, 342, 490, 131, true);
@@ -187,8 +199,9 @@ int state;
             graphics.drawString("Time Ran: " + Timing.msToString(timeRan), 15, 375);
             graphics.drawString("State: " + sState(), 15, 390);
             graphics.drawString("Levels Gained: " + getLvlGain(), 15, 405);
-            graphics.drawString("XP Gained: " + getXpGain(), 15, 420);
-            if (looting) graphics.drawString("Cowhides looted: " + looted, 15, 435);
+            int xpg = getXpGain();
+            graphics.drawString("XP Gained: " + xpg + " ("+df2.format(xpg/hoursRan)+" P/H)", 15, 420);
+            if (looting) graphics.drawString("Cowhides looted: " + looted + " ("+ df2.format(looted/hoursRan)+" P/H)", 15, 435);
             if (roundRobin) {
                 long nextS = nextSwitch - currentTime;
                 graphics.drawString("Time till next switch: " + Timing.msToString(nextS), 15, 450);
@@ -212,7 +225,10 @@ int state;
         }
 
         if (Banking.isBankScreenOpen()) {
-            Banking.depositAll();
+            Banking.depositAllExcept(FOOD);
+            sleep(500,1000);
+            if (FOOD != -1 && Inventory.getCount(FOOD) == 0)
+            Banking.withdraw((r.nextInt(3)+1), FOOD);
             sleep(1000, 1000);
         }
 
@@ -250,54 +266,63 @@ int state;
         cow.click("Attack Cow");
         killed = false;
         animated = false;
+        wtf = 0;
         return preDelay();
     }
 
     boolean animated = false;
     boolean killed = false;
+    int wtf = 0;
 
     void cmbDelay() {
         RSCharacter target = Combat.getTargetEntity();
         if (target == null) {
-            println("cmb delay was null");
-            sleep(500);
-            return;
-        }
-        RSNPC next = getCow();
-        // Start Delay
-        for (int i = 0; i < 15; i++) {
-            RSPlayer pl = Player.getRSPlayer();
-            if (pl.isInCombat() || pl.getAnimation() == 386) i--;
-            if (target.getHealthPercent() == 0.0) {
-
-                Random r = new Random();
-                if (r.nextInt(10) <= 4) { // Random chance to wait until loot
-                    for (int y = 0; y < 15; y++) { // sleeps until our cow drops loot
-                        if (target == null) {
-                            println("Despawned");
-                            return;
-                        }
-                        sleep(100);
-                    }
-                }
+            sleep(200,400);
+            println("target is null");
+            wtf++;
+            if (wtf > 8) {
                 killed = true;
                 animated = false;
-                return;
+            }
+            return;
+        }
+
+        println("target is real");
+        int factor = r.nextInt(10);
+        RSPlayer pl = Player.getRSPlayer();
+        for (int i = 0; i < 20; i++) {
+            RSNPC next = getCow();
+
+            if (factor >= 7 && next != null && getLoot() == null) {
+                if (!next.isOnScreen()) Camera.turnToTile(next);
+                next.hover();
             }
 
-            // MOUSE HOVERING ON NEXT TARGET
-            if(next != null) {
-                if (next.isOnScreen() && !next.isInCombat()) {
-                    next.hover();
-                } else {
-                    next = getCow();
+            if ((pl.isInCombat() || pl.getAnimation() == AANIMATION && i > 0)) i = 0;
+            println("Combat Delay: "+i);
+
+            if (pl.getHealthPercent() < 0.4) {
+                RSItem[] foods = Inventory.find(FOOD);
+                for (RSItem rsi : foods) {
+                    if (rsi != null) {
+                        rsi.click("Eat");
+                        sleep(250);
+                        break;
+                    }
                 }
-            } else {
-                next = getCow();
             }
-            sleep(100);
+
+            if(target.getHealthPercent() == 0.0) {
+                println("target is dead");
+                killed = true;
+                animated = false;
+                if (factor < 7) sleep(2000,3500);
+                return;
+            }
+            sleep(100, 125);
         }
         animated = false;
+        killed = true;
 
     }
 
@@ -318,7 +343,7 @@ int state;
         RSPlayer pl = Player.getRSPlayer();
         for (int i = 0; i < 15; i++) {
             if (pl == null) return false;
-            if (pl.getAnimation() == 386) {
+            if (pl.getAnimation() == AANIMATION) {
                 animated = true;
                 return true;
             }
@@ -395,7 +420,7 @@ int state;
                 sleep(250);
                 return;
             }
-            if (Player.getAnimation() == 386)
+            if (Player.getAnimation() == AANIMATION)
                 animated = true;
             sleep(100);
         }
@@ -407,11 +432,16 @@ class CowGUI extends JFrame implements ActionListener{
     JLabel titleLabel;
     JCheckBox lootBox;
     JCheckBox roundRobin;
+    JLabel animLabel;
+    JTextField animF;
+    JLabel foodLabel;
+    JTextField foodF;
+
 
     boolean started;
 
     void setup() {
-        setSize(275, 175);
+        setSize(275, 250);
         panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
 
@@ -425,10 +455,18 @@ class CowGUI extends JFrame implements ActionListener{
         lootBox.setAlignmentX(CENTER_ALIGNMENT);
         roundRobin = new JCheckBox("Round Robin");
         roundRobin.setAlignmentX(0.5f);
+        animLabel = new JLabel("Animation ID");
+        animF = new JTextField("486");
+        foodLabel = new JLabel("Food ID");
+        foodF = new JTextField("-1");
 
         panel.add(titleLabel);
         panel.add(lootBox);
         panel.add(roundRobin);
+        panel.add(animLabel);
+        panel.add(animF);
+        panel.add(foodLabel);
+        panel.add(foodF);
         panel.add(startButton);
 
         add(panel);
