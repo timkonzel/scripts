@@ -246,24 +246,29 @@ int wtf = 0;
 
         if (target == null) {
             sleep(200,400);
-
-            if (wtf > 15) {
+            println("target is null");
+            wtf++;
+            if (wtf > 8) {
                 killed = true;
                 animated = false;
             }
             return;
         }
 
+        println("target is real");
+
         RSPlayer pl = Player.getRSPlayer();
-        for (int i = 0; i < 10; i++) { // our iterative sleep
+        for (int i = 0; i < 20; i++) { // our iterative sleep
+
             pl = Player.getRSPlayer();
             /*
             if it makes it out of this loop, that means we have not been
             in combat or animated for 1000-1250 ms
              */
-            if ((pl.isInCombat() || pl.getAnimation() == AANIMATION) && i > 0) i--;
-
+            if ((pl.isInCombat() || pl.getAnimation() == AANIMATION) && i > 0) i = 0;
+            println("Combat timer: "+i);
             if (target.getHealthPercent() == 0.0) {
+                println("target is dead");
                 killed = true;
                 animated = false;
                 if (r.nextInt(10) < 6) sleep(1500,3000); // random chance to wait for loot
