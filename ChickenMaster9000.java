@@ -209,7 +209,7 @@ public class ChickenMaster9000 extends Script implements Painting{
     }
 
     RSNPC getChicken() {
-        RSNPC[] chickens = NPCs.find(CHICKENS);
+        RSNPC[] chickens = NPCs.findNearest(CHICKENS);
         RSTile me = Player.getPosition();
         for(RSNPC c : chickens) {
             if (c != null) {
@@ -218,6 +218,14 @@ public class ChickenMaster9000 extends Script implements Painting{
                     if (inBounds(pos)) return c;
                 }
             }
+        }
+        return null;
+    }
+
+    RSNPC getNextChicken(RSNPC current) {
+        RSNPC[] chickens = NPCs.findNearest(CHICKENS);
+        for (RSNPC c : chickens) {
+            if (c != null && c != current && !c.isInCombat() && Player.getPosition().distanceTo(c) < 8) return c;
         }
         return null;
     }
@@ -240,7 +248,7 @@ public class ChickenMaster9000 extends Script implements Painting{
             sleep(100);
         }
     }
-int wtf = 0;
+    int wtf = 0;
     void sleepTillDeath() { // sleeps until our target is dead
         RSCharacter target = Combat.getTargetEntity();
 
@@ -256,22 +264,27 @@ int wtf = 0;
         }
 
         println("target is real");
-
+        int factor = r.nextInt(10);
         RSPlayer pl = Player.getRSPlayer();
         for (int i = 0; i < 20; i++) { // our iterative sleep
-
             pl = Player.getRSPlayer();
+            RSNPC next = getNextChicken((RSNPC) target);
             /*
             if it makes it out of this loop, that means we have not been
             in combat or animated for 1000-1250 ms
              */
+            if (factor >= 7 && next != null && getFeather() == null) {
+                if (!next.isOnScreen()) Camera.turnToTile(next);
+                next.hover();
+            }
+
             if ((pl.isInCombat() || pl.getAnimation() == AANIMATION) && i > 0) i = 0;
             println("Combat timer: "+i);
             if (target.getHealthPercent() == 0.0) {
                 println("target is dead");
                 killed = true;
                 animated = false;
-                if (r.nextInt(10) < 6) sleep(1500,3000); // random chance to wait for loot
+                if (factor < 7) sleep(1500,3000); // random chance to wait for loot
                 return;
             }
 
