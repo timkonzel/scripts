@@ -1,6 +1,5 @@
 package scripts;
 
-import com.sun.deploy.uitoolkit.impl.awt.AWTAppletAdapter;
 import org.tribot.api.Timing;
 import org.tribot.api2007.*;
 import org.tribot.api2007.types.*;
