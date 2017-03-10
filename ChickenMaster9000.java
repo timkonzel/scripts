@@ -120,7 +120,7 @@ public class ChickenMaster9000 extends Script implements Painting{
         if ((p.isInCombat() || animated) && !killed) return 10; // in combat
         if (p.isMoving()) return 11; // moving
         if (p.getAnimation() != -1) return 12; // have an animation
-        if (p.getPosition().distanceTo(CHICKEN_LOC) > 7) return 1; // too far from chickens
+        if (p.getPosition().distanceTo(CHICKEN_LOC) > 9) return 1; // too far from chickens
         if (lootFeathers && getFeather() != null) return 2;
         if (roundRobin && needSwitch()) return 15;
         return 3;
