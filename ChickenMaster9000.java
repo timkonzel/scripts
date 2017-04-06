@@ -1,6 +1,8 @@
 package scripts;
 
 import org.tribot.api.Timing;
+import org.tribot.api.input.Mouse;
+import org.tribot.api.util.abc.ABCUtil;
 import org.tribot.api2007.*;
 import org.tribot.api2007.types.*;
 import org.tribot.script.Script;
@@ -19,15 +21,17 @@ import java.util.Random;
 /**
  * Created by tim on 2/22/2017.
  */
-@ScriptManifest(category = "Combat", name = "Chicken Master 9000", authors = "Master 9000", version = 0.03,
+@ScriptManifest(category = "Combat", name = "Chicken Master 9000", authors = "Master 9000", version = 0.04,
         description = "Kills chickens in lumbridge - more locations soon | " +
                 " Loots Feathers (Optional) | Round Robin (Optional) - Changes attack style periodically ")
 public class ChickenMaster9000 extends Script implements Painting{
-    final double VERSION = 0.03;
+    final double VERSION = 0.04;
     int state;
     int[] CHICKENS = {2693, 2692};
     int[] FEATHER = {314};
-    int AANIMATION = 386;
+    int ARROW_ID;
+    String ARROW_NAME;
+    int AANIMATION;
     RSTile CHICKEN_LOC;
 
 
@@ -35,29 +39,35 @@ public class ChickenMaster9000 extends Script implements Painting{
     Color bgColor = new Color(204, 187, 154);
     int looted;
 
-    int[] startLvls = new int[4];
-    int[] startXP = new int[4];
+    int[] startLvls = new int[5];
+    int[] startXP = new int[5];
+    int equipArrowAmt;
 
     // gui settings
-    boolean lootFeathers,roundRobin, pureMode;
+    boolean lootFeathers,roundRobin, pureMode, ranging;
     boolean started = false;
     //roundRobin
     long lastSwitchMillis;
     long timeToNext;
     long nextSwitchMillis;
 
+
+
     boolean killed = false;
     boolean animated = false;
-
     Random r = new Random();
 
+    ABCUtil abc2;
+    int runAt;
+    boolean shouldHover = false;
+    boolean shouldMenu = false;
     @Override
     public void run() {
         init();
 
         do {
+            abc2TimedActions();
             state = getState();
-
             switch (state) {
                 case -1: // should not happen, exit
                     break;
@@ -88,6 +98,56 @@ public class ChickenMaster9000 extends Script implements Painting{
                     break;
             }
         } while (state != -1);
+    }
+
+    void abc2TimedActions() {
+        if (abc2.shouldLeaveGame()) {
+            println("ABC2: Leaving Game");
+            abc2.leaveGame();
+            return;
+        }
+        if (abc2.shouldCheckTabs()) {
+            println("ABC2: Checking Tabs");
+            abc2.checkTabs();
+            return;
+        }
+        if (abc2.shouldCheckXP()) {
+            println("ABC2: Checking XP");
+            abc2.checkXP();
+            return;
+        }
+        if (abc2.shouldExamineEntity()) {
+            println("ABC2: Examine Entity");
+            abc2.examineEntity();
+            return;
+        }
+
+        if (abc2.shouldMoveMouse()) {
+            println("ABC2: Moving Mouse");
+            abc2.moveMouse();
+            return;
+        }
+        if (abc2.shouldPickupMouse()) {
+            println("ABC2: Pickup Mouse");
+            abc2.pickupMouse();
+            return;
+        }
+        if (abc2.shouldRightClick()) {
+            println("ABC2: Right Click");
+            abc2.rightClick();
+            return;
+        }
+        if (abc2.shouldRotateCamera()) {
+            println("ABC2: Rotate Camera");
+            abc2.rotateCamera();
+            return;
+        }
+
+        // i lied the others are going here too
+        if (!Game.isRunOn() && Game.getRunEnergy() >= runAt) {
+            Options.setRunOn(true);
+            runAt = this.abc2.generateRunActivation();
+        }
     }
 
     String sState() {
@@ -121,9 +181,15 @@ public class ChickenMaster9000 extends Script implements Painting{
         if (p.isMoving()) return 11; // moving
         if (p.getAnimation() != -1) return 12; // have an animation
         if (p.getPosition().distanceTo(CHICKEN_LOC) > 9) return 1; // too far from chickens
-        if (lootFeathers && getFeather() != null) return 2;
+        if (needLoot()) return 2;
         if (roundRobin && needSwitch()) return 15;
         return 3;
+    }
+
+    boolean needLoot() {
+        if (lootFeathers && getFeather() != null) return true;
+        if (ranging && getArrows() != null) return true;
+        return false;
     }
 
     void init() {
@@ -137,16 +203,47 @@ public class ChickenMaster9000 extends Script implements Painting{
         lootFeathers = gui.featherBox.isSelected();
         roundRobin = gui.roundRobin.isSelected();
         pureMode = gui.pureBox.isSelected();
+        ranging = gui.rangingBox.isSelected();
+        switch(gui.arrowSelect.getSelectedIndex()) {
+            case 0: // none
+                ARROW_ID = -1;
+                ARROW_NAME = "";
+                break;
+            case 1: // bronze arrow
+                ARROW_ID = 882;
+                ARROW_NAME = "Bronze Arrow";
+                break;
+            case 2: // iron arrow
+                ARROW_ID = 884;
+                ARROW_NAME = "Iron Arrow";
+                break;
+            case 3: // steel arrow
+                ARROW_ID = 886;
+                ARROW_NAME = "Steel Arrow";
+                break;
+            case 4: // bone bolts
+                ARROW_ID = 8882;
+                ARROW_NAME = "Bone Bolt";
+                break;
+            default:
+                ARROW_ID = -1;
+                ARROW_NAME = "";
+                break;
+        }
         AANIMATION = Integer.parseInt(gui.animationField.getText());
         if (roundRobin) {
             setStyle();
         }
-        println("looting: " + lootFeathers+" round robin: "+roundRobin + " pure mode: " + pureMode + " Anim: "+ AANIMATION);
+        println("looting: " + lootFeathers+" round robin: "+roundRobin + " pure mode: " + pureMode + " Anim: "+ AANIMATION
+                + "Ranging: " + ranging + "Arrow ID: "+ARROW_ID);
         startTime = System.currentTimeMillis();
         looted = 0;
         startLvls = getLvls();
         startXP = getXp();
         CHICKEN_LOC = new RSTile(3228, 3298, 0);
+        abc2 = new ABCUtil();
+        runAt = abc2.generateRunActivation();
+        Camera.setCameraAngle(100);
     }
 
     void walkToChickens() {
@@ -155,17 +252,18 @@ public class ChickenMaster9000 extends Script implements Painting{
     }
 
     void loot() {
+        if (equip()) equipArrowAmt = r.nextInt(30);
+        RSGroundItem arrows = getArrows();
+        if (arrows != null) {
+            arrows.click("Take "+ARROW_NAME);
+            sleepTillLoot();
+            return;
+        }
         RSGroundItem feather = getFeather();
         if (feather != null) {
-            if (!feather.isClickable()) {
-                Random r = new Random();
-                if (r.nextInt(2) == 0) {
+
+            if (!feather.isOnScreen()) {
                     Camera.turnToTile(feather);
-                    sleep(100);
-                } else {
-                    Walking.walkTo(feather);
-                    sleepTillStill();
-                }
             }
             feather.click("Take Feather");
             sleepTillLoot();
@@ -173,6 +271,7 @@ public class ChickenMaster9000 extends Script implements Painting{
     }
 
     void fight() {
+        if (equip()) equipArrowAmt = r.nextInt(30);
         RSNPC chicken = getChicken();
         if (chicken != null) {
             if (!chicken.isClickable()) {
@@ -188,12 +287,27 @@ public class ChickenMaster9000 extends Script implements Painting{
             chicken.click("Attack Chicken");
             killed = false;
             animated = false;
+            shouldHover = abc2.shouldHover();
+            shouldMenu = abc2.shouldOpenMenu();
             wtf = 0;
             sleep(200);
         } else {
            // println("cannot find a chicken");
             sleep(2000);
         }
+    }
+
+    boolean equip() {
+        if (!ranging) return false;
+        if (Inventory.getCount(ARROW_ID) > equipArrowAmt || Inventory.isFull()) {
+            RSItem[] item = Inventory.find(ARROW_ID);
+            if (item[0] != null) {
+                item[0].click("Wield");
+                sleep(80,350);
+                return true;
+            }
+        }
+        return false;
     }
 
     RSGroundItem getFeather() {
@@ -207,13 +321,23 @@ public class ChickenMaster9000 extends Script implements Painting{
         return null;
     }
 
+    RSGroundItem getArrows() {
+        RSGroundItem[] arrows = GroundItems.find(ARROW_ID);
+
+        for (RSGroundItem item : arrows) {
+            if (item != null && item.getStack() >  3 && Player.getPosition().distanceTo(item) < 4)
+                return item;
+        }
+        return null;
+    }
+
     RSNPC getChicken() {
         RSNPC[] chickens = NPCs.findNearest(CHICKENS);
         RSTile me = Player.getPosition();
         for(RSNPC c : chickens) {
             if (c != null) {
                 RSTile pos = c.getPosition();
-                if (!c.isInCombat() && me.distanceTo(c) < 8) {
+                if (!c.isInCombat() && me.distanceTo(c) < 8 && c.getAnimation() == -1) {
                     if (inBounds(pos)) return c;
                 }
             }
@@ -237,11 +361,18 @@ public class ChickenMaster9000 extends Script implements Painting{
 
     void sleepTillLoot() {
         int count = Inventory.getCount("Feather");
+        int count2 = Inventory.getCount(ARROW_ID);
+
         for (int i = 0; i < 10; i++) {
             if (Player.isMoving() && i > 0) i--;
             int change = Inventory.getCount("Feather") - count;
+            int change2 = Inventory.getCount(ARROW_ID) - count2;
+
             if (change > 0) {
                 looted += change;
+                return;
+            }
+            if (change2 > 0) {
                 return;
             }
             sleep(100);
@@ -253,7 +384,7 @@ public class ChickenMaster9000 extends Script implements Painting{
 
         if (target == null) {
             sleep(200,400);
-            println("target is null");
+            //println("target is null");
             wtf++;
             if (wtf > 8) {
                 killed = true;
@@ -262,9 +393,10 @@ public class ChickenMaster9000 extends Script implements Painting{
             return;
         }
 
-        println("target is real");
+       // println("target is real");
         int factor = r.nextInt(10);
         RSPlayer pl = Player.getRSPlayer();
+
         for (int i = 0; i < 20; i++) { // our iterative sleep
             pl = Player.getRSPlayer();
             RSNPC next = getNextChicken((RSNPC) target);
@@ -272,21 +404,29 @@ public class ChickenMaster9000 extends Script implements Painting{
             if it makes it out of this loop, that means we have not been
             in combat or animated for 1000-1250 ms
              */
-            if (factor >= 7 && next != null && getFeather() == null) {
-                if (!next.isOnScreen()) Camera.turnToTile(next);
-                next.hover();
+
+            if (next != null && !needLoot()) {
+                if (Mouse.isInBounds() && shouldHover) {
+                    next.hover();
+
+                    if (shouldMenu) {
+                        Mouse.click(next.getPosition().getHumanHoverPoint(), 3);
+                    }
+                }
+
             }
 
             if ((pl.isInCombat() || pl.getAnimation() == AANIMATION) && i > 0) i = 0;
-            println("Combat timer: "+i);
+            //println("Combat timer: "+i);
             if (target.getHealthPercent() == 0.0) {
-                println("target is dead");
+                //println("target is dead");
                 killed = true;
                 animated = false;
                 if (factor < 7) sleep(1500,3000); // random chance to wait for loot
                 return;
             }
 
+            abc2TimedActions();
             sleep(100,125);
         }
         animated = false;
@@ -364,20 +504,22 @@ public class ChickenMaster9000 extends Script implements Painting{
     }
 
     int[] getLvls() {
-        int[] lvls = new int[4];
+        int[] lvls = new int[5];
         lvls[0] = Skills.getActualLevel(Skills.SKILLS.ATTACK);
         lvls[1] = Skills.getActualLevel(Skills.SKILLS.STRENGTH);
         lvls[2] = Skills.getActualLevel(Skills.SKILLS.DEFENCE);
         lvls[3] = Skills.getActualLevel(Skills.SKILLS.HITPOINTS);
+        lvls[4] = Skills.getActualLevel(Skills.SKILLS.RANGED);
         return lvls;
     }
 
     int[] getXp() {
-        int[] xps = new int[4];
+        int[] xps = new int[5];
         xps[0] = Skills.getXP(Skills.SKILLS.ATTACK);
         xps[1] = Skills.getXP(Skills.SKILLS.STRENGTH);
         xps[2] = Skills.getXP(Skills.SKILLS.DEFENCE);
         xps[3] = Skills.getXP(Skills.SKILLS.HITPOINTS);
+        xps[4] = Skills.getXP(Skills.SKILLS.RANGED);
         return xps;
     }
 
@@ -407,13 +549,15 @@ class ChickenGUI extends JFrame implements ActionListener{
     JCheckBox featherBox;
     JCheckBox roundRobin;
     JCheckBox pureBox;
+    JCheckBox rangingBox;
     JLabel animationLabel;
     JTextField animationField;
-
+    String[] arrows = {"- Select One -", "Bronze Arrow", "Iron Arrow", "Steel Arrow", "Bone Bolts"};
+    JComboBox arrowSelect;
     boolean started;
 
     void setup() {
-        setSize(275, 175);
+        setSize(300, 250);
         panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
 
@@ -431,6 +575,8 @@ class ChickenGUI extends JFrame implements ActionListener{
         pureBox.setAlignmentX(0.5f);
         animationLabel = new JLabel("Enter Animation");
         animationField = new JTextField("386");
+        rangingBox = new JCheckBox("Ranging Mode");
+        arrowSelect = new JComboBox(arrows);
 
         panel.add(titleLabel);
         panel.add(featherBox);
@@ -438,6 +584,8 @@ class ChickenGUI extends JFrame implements ActionListener{
         panel.add(pureBox);
         panel.add(animationLabel);
         panel.add(animationField);
+        panel.add(rangingBox);
+        panel.add(arrowSelect);
         panel.add(startButton);
 
 
