@@ -1,0 +1,6 @@
+*.zip
+webwalker_logic/local/walker_engine/bfs/BFS.java
+webwalker_logic/local/walker_engine/interaction_handling/InteractionHelper.java
+webwalker_logic/local/walker_engine/interaction_handling/PathObjectHandler.java
+webwalker_logic/local/walker_engine/interaction_handling/DoomsToggle.java
+webwalker_logic/local/walker_engine/interaction_handling/AccurateMouse.java
