@@ -9,11 +9,14 @@ import org.tribot.script.Script;
 import org.tribot.script.ScriptManifest;
 import org.tribot.script.interfaces.Painting;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.IOException;
 import java.math.RoundingMode;
+import java.net.URL;
 import java.text.DecimalFormat;
 import java.util.Random;
 
@@ -280,26 +283,37 @@ Random r = new Random();
     @Override
     public void onPaint(Graphics graphics) {
         if (started) {
+            Graphics2D g2 = (Graphics2D) graphics;
+            g2.drawImage(img, 1, 338, null);
             long currentTime = System.currentTimeMillis();
             long timeRan = currentTime - startTime;
+            Font font = new Font("TimesRoman", Font.PLAIN, 12);
             DecimalFormat df = new DecimalFormat("##.####");
             DecimalFormat df2 = new DecimalFormat("####.##");
             df.setRoundingMode(RoundingMode.DOWN);
             double hoursRan2 = timeRan / 3600000.0;
             double hoursRan = Double.parseDouble(df.format(hoursRan2));
             graphics.setColor(bgColor);
-            graphics.draw3DRect(6, 342, 490, 131, true);
-            graphics.fill3DRect(6, 342, 490, 131, true);
-            graphics.setColor(Color.BLACK);
-            graphics.drawString("Cow Master 9000 v"+version, 15, 360);
-            graphics.drawString("Time Ran: " + Timing.msToString(timeRan), 15, 375);
-            graphics.drawString("State: " + sState(), 15, 390);
-            graphics.drawString("Levels Gained: " + getLvlGain(), 15, 405);
+            graphics.setColor(Color.RED);
+            graphics.setFont(font);
+            graphics.drawString("v"+version, 431, 375);
+            graphics.drawString(Timing.msToString(timeRan), 150, 397);
+            graphics.drawString(sState(), 15, 495);
+            graphics.drawString(""+getLvlGain(), 150, 420);
             int xpg = getXpGain();
-            graphics.drawString("XP Gained: " + xpg + " ("+df2.format(xpg/hoursRan)+" P/H)", 15, 420);
-            if (looting) graphics.drawString("Cowhides looted: " + looted + " ("+ df2.format(looted/hoursRan)+" P/H)", 15, 435);
+            graphics.drawString(xpg + " ("+df2.format(xpg/hoursRan)+" P/H)", 150, 442);
+            if (looting) graphics.drawString(looted + " ("+ df2.format(looted/hoursRan)+" P/H)", 150, 466);
         }
     }
+
+    private Image getImage(String url) {
+        try {
+            return ImageIO.read(new URL(url));
+        } catch(IOException e) {
+            return null;
+        }
+    }
+    private final Image img = getImage("http://i.imgur.com/Vc2TQw4.gif");
 
     void bank() {
         if (!Inventory.isFull()) return;
@@ -431,6 +445,15 @@ Random r = new Random();
     }
 
     boolean fight() {
+        if (ChooseOption.isOpen()) {
+            ChooseOption.select("Attack Cow");
+            killed = false;
+            animated = false;
+            wtf = 0;
+            shouldHover = abc2.shouldHover();
+            shouldMenu = abc2.shouldOpenMenu();
+            return preDelay();
+        }
         if (equip()) equipArrowAmt = r.nextInt(100);
         RSNPC cow = getCow();
         RSTile me = Player.getPosition();
@@ -516,16 +539,14 @@ Random r = new Random();
             }
 
             if(target.getHealthPercent() == 0.0) {
-                if(ChooseOption.isOpen()) {
-                    ChooseOption.select("Attack Cow");
-                    sleepStill();
-                    i = 0;
-                } else {
-                    killed = true;
-                    animated = false;
-                    if (!shouldHover && r.nextInt(10) >= 7) sleep(2000,3500); // randomly wait for loot
-                    return;
-                }
+                killed = true;
+                animated = false;
+                if (!shouldHover && r.nextInt(10) >= 7) sleep(2000,3500); // randomly wait for loot
+                return;
+            }
+            
+            if (ChooseOption.isOpen() && !ChooseOption.isOptionValid("Attack Cow")) {
+                ChooseOption.close();
             }
 
             sleep(100, 125);
@@ -540,6 +561,7 @@ Random r = new Random();
         if (n == null || n.getAnimablePosition() == null || n.getAnimablePosition().getHumanHoverPoint() == null || Mouse.getPos() == null) return false;
         Point p1 = n.getAnimablePosition().getHumanHoverPoint();
         Point p2 = Mouse.getPos();
+        if (p1 == null || p2 == null) return false;
         int dist = Math.abs(p2.x - p1.x) + Math.abs(p2.y - p1.y);
         if (dist < 60) {
             return true;
@@ -680,8 +702,8 @@ class CowGUI extends JFrame implements ActionListener{
         panel.add(titleLabel);
         panel.add(locationBox);
         panel.add(lootBox);
-        panel.add(ranging);
-        panel.add(arrowBox);
+      //  panel.add(ranging);
+       // panel.add(arrowBox);
         panel.add(animLabel);
         panel.add(animF);
         panel.add(foodLabel);
