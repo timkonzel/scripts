@@ -29,7 +29,7 @@ RSTile[] COWTILES = new RSTile[4];
 RSTile BANKTILE;
 int[] COWS = {2805, 2806, 2807, 2808, 2809};
 
-double version = 0.03;
+double version = 0.04;
 
 int[] startLvls = new int[5];
 int[] startXps = new int[5];
@@ -47,6 +47,8 @@ int equipArrowAmt = 0;
 ABCUtil abc2;
 int runAt;
 boolean shouldHover, shouldMenu;
+
+int LOOT_DIST;
 
 Random r = new Random();
 
@@ -104,6 +106,7 @@ Random r = new Random();
         AANIMATION = Integer.parseInt(gui.animF.getText());
         FOOD = Integer.parseInt(gui.foodF.getText());
         int aIndex = gui.arrowBox.getSelectedIndex();
+        LOOT_DIST = gui.lootDistSlider.getValue();
         switch(gui.arrowBox.getSelectedIndex()) {
             case 0: // none
                 ARROW_ID = -1;
@@ -227,7 +230,7 @@ Random r = new Random();
         RSTile me = Player.getPosition();
         for (RSGroundItem i : items) {
             if (i != null) {
-                if (me.distanceTo(i) < 4) return i;
+                if (me.distanceTo(i) < LOOT_DIST) return i;
             }
         }
         return null;
@@ -303,6 +306,7 @@ Random r = new Random();
             int xpg = getXpGain();
             graphics.drawString(xpg + " ("+df2.format(xpg/hoursRan)+" P/H)", 150, 442);
             if (looting) graphics.drawString(looted + " ("+ df2.format(looted/hoursRan)+" P/H)", 150, 466);
+
         }
     }
 
@@ -362,6 +366,7 @@ Random r = new Random();
                 println("Web walking to loot to prevent possible bot-like actions");
                 WebWalking.walkTo(arrows);
             }
+            if (!arrows.isOnScreen()) Camera.turnToTile(arrows);
             arrows.click("Take "+ARROW_NAME);
             lootDelay();
             return;
@@ -374,6 +379,7 @@ Random r = new Random();
                     println("Web walking to loot to prevent possible bot-like actions");
                     WebWalking.walkTo(item);
                 }
+                if (!item.isOnScreen()) Camera.turnToTile(item);
                 item.click("Take Cowhide");
                 lootDelay();
             }
@@ -445,6 +451,12 @@ Random r = new Random();
     }
 
     boolean fight() {
+        long ctime = System.currentTimeMillis();
+        if (ctime - lastAttack < 2000 && ctime - deadTarg > 2000) {
+            println("stopped a false attack");
+            cmbDelay();
+            return false;
+        }
         if (ChooseOption.isOpen()) {
             ChooseOption.select("Attack Cow");
             killed = false;
@@ -483,9 +495,12 @@ Random r = new Random();
     boolean animated = false;
     boolean killed = false;
     int wtf = 0;
-
+    long lastAttack,deadTarg = 0;
     void cmbDelay() {
-        RSCharacter target = Combat.getTargetEntity();
+        RSPlayer pl = Player.getRSPlayer();
+        RSCharacter target = pl.getInteractingCharacter(); // who we are targeting
+        RSCharacter[] attackers = Combat.getAttackingEntities(); // get our attackers
+
         if (target == null) {
             sleep(200,400);
             //println("target is null");
@@ -496,16 +511,16 @@ Random r = new Random();
             }
             return;
         }
-
        // println("target is real");
-        RSPlayer pl = Player.getRSPlayer();
-        RSNPC next = getCow();
+
+        RSNPC next = getCow();  // get our next target
         for (int i = 0; i < 20; i++) {
             /*
             *   update our next target
             *   if our previous next target is no longer a valid target
              */
-            if (!canAttack(next)) next = getCow();
+            if (next != null && !canAttack(next)) next = getCow();
+            if (next != null && target != null && next.equals((RSNPC) target)) next = getCow();
 
             /*
             *   hover over our next target if we arent
@@ -513,18 +528,38 @@ Random r = new Random();
              */
             if (shouldHover && next != null && !needLoot() && !isHovering(next) && !ChooseOption.isOpen()) {
                 if (!next.isOnScreen()) Camera.turnToTile(next);
-                println("ABC2: Hover Next Target");
+                //println("ABC2: Hover Next Target");
                 next.hover();
             }
-            if (shouldMenu && next != null && !needLoot() && isHovering(next) && !ChooseOption.isOpen()) {
+            if (shouldMenu && next != null && target != null && !next.equals(target) && !needLoot() && isHovering(next) && !ChooseOption.isOpen()) {
                 println("ABC2: Open Next Menu");
                 Mouse.click(3);
             }
 
-            if ((pl.isInCombat() || pl.getAnimation() == AANIMATION && i > 0)) i = 0; // reset sleep
-            RSCharacter check = Combat.getTargetEntity();
-            if (check != null && !target.equals(check)) {
-                target = check;
+
+            if (pl.getAnimation() != -1) {
+                i = 0; // reset sleep
+                lastAttack = System.currentTimeMillis(); // update last attack timer
+                RSCharacter currTarg = pl.getInteractingCharacter(); // get our current target
+                if (currTarg != null && target != null && !target.equals(currTarg)) { // if our set target is not current switch
+                    println("Updating our target to who we our attacking");
+                    target = currTarg; // update the target
+                }
+            }
+
+            if (System.currentTimeMillis() - lastAttack > 3000) {
+                if (pl.isInCombat()) {
+                    println("havent attacked in a while, also in combat, try to fight attackers");
+                    attackers = Combat.getAttackingEntities();
+                    for (RSCharacter rsc : attackers) {
+                        if (rsc != null) {
+                            RSNPC npc = (RSNPC) rsc;
+                            if (canAttack(npc)) {
+                                npc.click("Attack Cow");
+                            }
+                        }
+                    }
+                }
             }
 
             if (pl.getHealthPercent() < 0.4 && FOOD != -1) { // we need to eat or get the hell out
@@ -541,10 +576,11 @@ Random r = new Random();
             if(target.getHealthPercent() == 0.0) {
                 killed = true;
                 animated = false;
+                deadTarg = System.currentTimeMillis();
                 if (!shouldHover && r.nextInt(10) >= 7) sleep(2000,3500); // randomly wait for loot
                 return;
             }
-            
+
             if (ChooseOption.isOpen() && !ChooseOption.isOptionValid("Attack Cow")) {
                 ChooseOption.close();
             }
@@ -555,6 +591,22 @@ Random r = new Random();
         animated = false;
         killed = true;
 
+    }
+
+    boolean preDelay() {
+        RSPlayer pl = Player.getRSPlayer();
+        for (int i = 0; i < 15; i++) {
+            if (pl == null) return false;
+            if (pl.getAnimation() != -1) {
+                lastAttack = System.currentTimeMillis();
+                animated = true;
+                return true;
+            }
+            if (pl.isMoving()) i--;
+            if (pl.isInCombat()) return true;
+            sleep(100);
+        }
+        return false;
     }
 
     boolean isHovering(RSNPC n) {
@@ -585,21 +637,6 @@ Random r = new Random();
             }
             sleep(100,125);
         }
-    }
-
-    boolean preDelay() {
-        RSPlayer pl = Player.getRSPlayer();
-        for (int i = 0; i < 15; i++) {
-            if (pl == null) return false;
-            if (pl.getAnimation() == AANIMATION) {
-                animated = true;
-                return true;
-            }
-            if (pl.isMoving()) i--;
-            if (pl.isInCombat()) return true;
-            sleep(100);
-        }
-        return false;
     }
 
     int[] getLvls() {
@@ -647,7 +684,7 @@ Random r = new Random();
                 sleep(250);
                 return;
             }
-            if (Player.getAnimation() == AANIMATION)
+            if (Player.getAnimation() != -1)
                 animated = true;
             sleep(100);
             abc2TimedActions();
@@ -659,19 +696,18 @@ class CowGUI extends JFrame implements ActionListener{
     String[] arrows = {"- Select One -", "Bronze Arrow", "Iron Arrow", "Steel Arrow", "Bone Bolts"};
     JPanel panel;
     JButton startButton;
-    JLabel titleLabel;
+    JLabel titleLabel, animLabel, foodLabel, lootDLabel, attDLabel;
     JCheckBox lootBox;
-    JLabel animLabel;
     JTextField animF;
-    JLabel foodLabel;
     JTextField foodF;
     JCheckBox ranging;
     JComboBox locationBox, arrowBox;
+    JSlider lootDistSlider;
 
     boolean started;
 
     void setup() {
-        setSize(275, 250);
+        setSize(200, 250);
         panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
 
@@ -682,7 +718,7 @@ class CowGUI extends JFrame implements ActionListener{
         titleLabel = new JLabel("Cow Master 9000: Setup");
         titleLabel.setAlignmentX(CENTER_ALIGNMENT);
         lootBox = new JCheckBox("Loot");
-        lootBox.setAlignmentX(CENTER_ALIGNMENT);
+        lootBox.setAlignmentX(0.5f);
         animLabel = new JLabel("Animation ID");
         animLabel.setAlignmentX(0.5f);
         animF = new JTextField("486");
@@ -697,19 +733,23 @@ class CowGUI extends JFrame implements ActionListener{
         locationBox.setAlignmentX(0.5f);
         arrowBox = new JComboBox(arrows);
         arrowBox.setAlignmentX(0.5f);
-
+        lootDistSlider = new JSlider();
+        lootDistSlider.setMinimum(3);
+        lootDistSlider.setValue(4);
+        lootDistSlider.setMaximum(12);
+        lootDLabel = new JLabel("Loot Distance: ");
+        lootDLabel.setAlignmentX(0.5f);
 
         panel.add(titleLabel);
         panel.add(locationBox);
         panel.add(lootBox);
-      //  panel.add(ranging);
-       // panel.add(arrowBox);
-        panel.add(animLabel);
-        panel.add(animF);
+        panel.add(ranging);
+        panel.add(arrowBox);
         panel.add(foodLabel);
         panel.add(foodF);
+        panel.add(lootDLabel);
+        panel.add(lootDistSlider);
         panel.add(startButton);
-
         add(panel);
 
         started = false;
