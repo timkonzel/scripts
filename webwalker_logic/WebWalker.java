@@ -1,29 +1,72 @@
 package scripts.webwalker_logic;
 
-
+import org.tribot.api.util.abc.ABCUtil;
 import org.tribot.api2007.Game;
+import org.tribot.api2007.Options;
 import org.tribot.api2007.Player;
 import org.tribot.api2007.types.RSTile;
 import scripts.webwalker_logic.local.walker_engine.WalkerEngine;
 import scripts.webwalker_logic.local.walker_engine.WalkingCondition;
 import scripts.webwalker_logic.local.walker_engine.bfs.BFS;
 import scripts.webwalker_logic.shared.helpers.BankHelper;
+import scripts.webwalker_logic.teleport_logic.TeleportManager;
 
 import java.util.ArrayList;
 
 public class WebWalker {
 
-    public final String version = "1.0.8";
+    private static final WalkingCondition EMPTY_WALKING_CONDITION = () -> WalkingCondition.State.CONTINUE_WALKER;
+    private final String version = "1.1.14";
 
     private static WebWalker instance;
     private boolean logging;
+    private WalkingCondition globalWalkingCondition;
+    private int runAt;
 
-    private WebWalker(){
+    private org.tribot.api.util.ABCUtil abcUtilV1;
+    private ABCUtil abcUtilV2;
+
+    private WebWalker() {
+        this(new ABCUtil());
+    }
+
+    private WebWalker(ABCUtil util) {
         logging = true;
+        abcUtilV2 = util;
+        runAt = abcUtilV2.generateRunActivation();
+        globalWalkingCondition = () -> {
+            if (!Game.isRunOn() && Game.getRunEnergy() > runAt){
+                Options.setRunOn(true);
+                runAt = abcUtilV2.generateRunActivation();
+            }
+            return WalkingCondition.State.CONTINUE_WALKER;
+        };
+    }
+
+    private WebWalker(org.tribot.api.util.ABCUtil util) {
+        logging = true;
+        abcUtilV1 = util;
+        runAt = abcUtilV1.INT_TRACKER.NEXT_RUN_AT.next();
+        globalWalkingCondition = () -> {
+            if (!Game.isRunOn() && Game.getRunEnergy() > runAt){
+                Options.setRunOn(true);
+                runAt = abcUtilV1.INT_TRACKER.NEXT_RUN_AT.next();
+                abcUtilV1.INT_TRACKER.NEXT_RUN_AT.reset();
+            }
+            return WalkingCondition.State.CONTINUE_WALKER;
+        };
     }
 
     private static WebWalker getInstance(){
         return instance != null ? instance : (instance = new WebWalker());
+    }
+
+    private static WebWalker getInstance(ABCUtil abcUtil){
+        return instance != null ? instance : (instance = new WebWalker(abcUtil));
+    }
+
+    private static WebWalker getInstance(org.tribot.api.util.ABCUtil abcUtil){
+        return instance != null ? instance : (instance = new WebWalker(abcUtil));
     }
 
     /**
@@ -59,6 +102,16 @@ public class WebWalker {
     }
 
     /**
+     * Sets the global walking condition. {@code walkingCondition} will be automatically
+     * set in wall webwalker calls.
+     *
+     * @param walkingCondition global walking condition
+     */
+    public static void setGlobalWalkingCondition(WalkingCondition walkingCondition){
+        getInstance().globalWalkingCondition = walkingCondition;
+    }
+
+    /**
      *
      * @return version number of webwalker.
      */
@@ -72,7 +125,7 @@ public class WebWalker {
      * @return Whether destination was successfully reached.
      */
     public static boolean walkTo(RSTile destination){
-        return walkTo(destination, null);
+        return walkTo(destination, EMPTY_WALKING_CONDITION);
     }
 
     /**
@@ -85,25 +138,53 @@ public class WebWalker {
      *         condition returns.
      */
     public static boolean walkTo(RSTile destination, WalkingCondition walkingCondition){
+        if (Player.getPosition().equals(destination)){
+            return true;
+        }
         ArrayList<RSTile> path = WebPath.getPath(destination);
-        if (!Player.getPosition().equals(destination) && path.size() == 0){
+        if (path.size() == 0){
             return false;
         }
-        return WalkerEngine.getInstance().walkPath(path, walkingCondition);
+        ArrayList<RSTile> bestPath = TeleportManager.teleport(path.size(), destination);
+        if (bestPath != null){
+            path = bestPath;
+        }
+
+        return WalkerEngine.getInstance().walkPath(path, walkingCondition.combine(getInstance().globalWalkingCondition));
     }
 
     public static boolean walkToBank(){
-        return walkToBank(null);
+        return walkToBank(EMPTY_WALKING_CONDITION);
     }
 
     public static boolean walkToBank(WalkingCondition walkingCondition) {
-        return BankHelper.isInBank() || WalkerEngine.getInstance().walkPath(WebPath.getPathToBank(), ((WalkingCondition) () -> {
+        if (BankHelper.isInBank()){
+            System.out.println("already in bank");
+            return true;
+        }
+
+        ArrayList<RSTile> bankPath = WebPath.getPathToBank();
+
+        if (bankPath.size() == 0){
+            return false;
+        }
+
+        ArrayList<RSTile> bestPath = TeleportManager.teleport(bankPath.size(), bankPath.get(bankPath.size() - 1));
+        if (bestPath != null){
+            bankPath = bestPath;
+        }
+
+        return WalkerEngine.getInstance().walkPath(bankPath, ((WalkingCondition) () -> {
             RSTile destination = Game.getDestination();
             return destination != null && BankHelper.isInBank(destination) ? WalkingCondition.State.EXIT_OUT_WALKER_SUCCESS : WalkingCondition.State.CONTINUE_WALKER;
-        }).combine(walkingCondition));
+        }).combine(walkingCondition.combine(getInstance().globalWalkingCondition)));
     }
 
     public static void setLocal(boolean b){
+        if (b){
+            setApiKey("0243f275-cf5f-428b-be41-e4804e06e0da", "4CB3A01E48C3F79F");
+            System.out.println("Switching to local api key");
+        }
         WebPathCore.setLocal(b);
     }
 
@@ -111,4 +192,29 @@ public class WebWalker {
         WebPathCore.setAuth(apiKey, secretKey);
     }
 
+    private static void setABCUtil(ABCUtil util) {
+        WebWalker walker = getInstance(util);
+
+        if (walker.abcUtilV2 != util) {
+            walker.abcUtilV2.close();
+            walker.abcUtilV2 = util;
+        }
+
+        if (walker.abcUtilV1 != null) {
+            walker.abcUtilV1 = null;
+        }
+    }
+
+    private static void setABCUtil(org.tribot.api.util.ABCUtil util) {
+        WebWalker walker = getInstance(util);
+
+        if (walker.abcUtilV1 != util) {
+            walker.abcUtilV1 = null;
+            walker.abcUtilV1 = util;
+        }
+
+        if (walker.abcUtilV2 != null) {
+            walker.abcUtilV2.close();
+        }
+    }
 }

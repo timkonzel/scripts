@@ -4,10 +4,7 @@ package scripts.webwalker_logic.local.walker_engine;
 import org.tribot.api.General;
 import org.tribot.api.input.Mouse;
 import org.tribot.api.interfaces.Positionable;
-import org.tribot.api2007.Game;
-import org.tribot.api2007.Login;
-import org.tribot.api2007.Player;
-import org.tribot.api2007.Projection;
+import org.tribot.api2007.*;
 import org.tribot.api2007.types.RSTile;
 import scripts.webwalker_logic.local.walker_engine.bfs.BFS;
 import scripts.webwalker_logic.local.walker_engine.local_pathfinding.PathAnalyzer;
@@ -29,11 +26,13 @@ public class WalkerEngine implements Loggable{
     private int attemptsForAction;
     private final int failThreshold;
     private boolean navigating;
+    private ArrayList<RSTile> currentPath;
 
     private WalkerEngine(){
         attemptsForAction = 0;
         failThreshold = 3;
         navigating = false;
+        currentPath = null;
     }
 
     public static WalkerEngine getInstance(){
@@ -44,6 +43,10 @@ public class WalkerEngine implements Loggable{
         return walkPath(path, null);
     }
 
+    public ArrayList<RSTile> getCurrentPath() {
+        return currentPath;
+    }
+
     /**
      *
      * @param path
@@ -52,6 +55,7 @@ public class WalkerEngine implements Loggable{
      */
     public boolean walkPath(ArrayList<RSTile> path, WalkingCondition walkingCondition){
         navigating = true;
+        currentPath = path;
         try {
             if (path.size() == 0) {
                 log("Path length is 0. We've already arrived to destination.");
@@ -105,48 +109,6 @@ public class WalkerEngine implements Loggable{
 
                 CustomConditionContainer conditionContainer = new CustomConditionContainer(walkingCondition);
                 switch (destinationDetails.getState()) {
-                    case FURTHEST_CLICKABLE_TILE:
-                        if (clickMinimap(currentNode)) {
-                            long offsetWalkingTimeout = System.currentTimeMillis() + General.random(2500, 4000);
-                            WaitFor.condition(10000, () -> {
-                                switch (conditionContainer.trigger()) {
-                                    case EXIT_OUT_WALKER_SUCCESS:
-                                    case EXIT_OUT_WALKER_FAIL:
-                                        return WaitFor.Return.SUCCESS;
-                                }
-
-                                PathAnalyzer.DestinationDetails furthestReachable = PathAnalyzer.furthestReachableTile(path);
-                                PathFindingNode currentDestination = BFS.bfsClosestToPath(path, RealTimeCollisionTile.get(destination.getX(), destination.getY(), destination.getZ()));
-                                if (currentDestination == null) {
-                                    log("Could not walk to closest tile in path.");
-                                    failedAttempt();
-                                    return WaitFor.Return.FAIL;
-                                }
-                                int indexCurrentDestination = path.indexOf(currentDestination.getRSTile());
-
-                                PathFindingNode closestToPlayer = PathAnalyzer.closestTileInPathToPlayer(path);
-                                if (closestToPlayer == null) {
-                                    log("Could not detect closest tile to player in path.");
-                                    failedAttempt();
-                                    return WaitFor.Return.FAIL;
-                                }
-                                int indexCurrentPosition = path.indexOf(closestToPlayer.getRSTile());
-                                if (furthestReachable == null) {
-                                    return WaitFor.Return.FAIL;
-                                }
-                                int indexNextDestination = path.indexOf(furthestReachable.getDestination().getRSTile());
-
-                                if (indexNextDestination - indexCurrentDestination > 5 || indexCurrentDestination - indexCurrentPosition < 5) {
-                                    return WaitFor.Return.SUCCESS;
-                                }
-                                if (System.currentTimeMillis() > offsetWalkingTimeout && !Player.isMoving()){
-                                    return WaitFor.Return.FAIL;
-                                }
-                                return WaitFor.milliseconds(100);
-                            });
-                        }
-                        break;
-
                     case DISCONNECTED_PATH:
                         if (currentNode.getRSTile().distanceTo(Player.getPosition()) > 10){
                             clickMinimap(currentNode);
@@ -189,6 +151,48 @@ public class WalkerEngine implements Loggable{
                         }
                         break;
 
+                    case FURTHEST_CLICKABLE_TILE:
+                        if (clickMinimap(currentNode)) {
+                            long offsetWalkingTimeout = System.currentTimeMillis() + General.random(2500, 4000);
+                            WaitFor.condition(10000, () -> {
+                                switch (conditionContainer.trigger()) {
+                                    case EXIT_OUT_WALKER_SUCCESS:
+                                    case EXIT_OUT_WALKER_FAIL:
+                                        return WaitFor.Return.SUCCESS;
+                                }
+
+                                PathAnalyzer.DestinationDetails furthestReachable = PathAnalyzer.furthestReachableTile(path);
+                                PathFindingNode currentDestination = BFS.bfsClosestToPath(path, RealTimeCollisionTile.get(destination.getX(), destination.getY(), destination.getZ()));
+                                if (currentDestination == null) {
+                                    log("Could not walk to closest tile in path.");
+                                    failedAttempt();
+                                    return WaitFor.Return.FAIL;
+                                }
+                                int indexCurrentDestination = path.indexOf(currentDestination.getRSTile());
+
+                                PathFindingNode closestToPlayer = PathAnalyzer.closestTileInPathToPlayer(path);
+                                if (closestToPlayer == null) {
+                                    log("Could not detect closest tile to player in path.");
+                                    failedAttempt();
+                                    return WaitFor.Return.FAIL;
+                                }
+                                int indexCurrentPosition = path.indexOf(closestToPlayer.getRSTile());
+                                if (furthestReachable == null) {
+                                    return WaitFor.Return.FAIL;
+                                }
+                                int indexNextDestination = path.indexOf(furthestReachable.getDestination().getRSTile());
+
+                                if (indexNextDestination - indexCurrentDestination > 5 || indexCurrentDestination - indexCurrentPosition < 5) {
+                                    return WaitFor.Return.SUCCESS;
+                                }
+                                if (System.currentTimeMillis() > offsetWalkingTimeout && !Player.isMoving()){
+                                    return WaitFor.Return.FAIL;
+                                }
+                                return WaitFor.milliseconds(100);
+                            });
+                        }
+                        break;
+
                     case END_OF_PATH:
                         clickMinimap(destinationDetails.getDestination());
                         log("Reached end of path");
@@ -221,20 +225,6 @@ public class WalkerEngine implements Loggable{
                 && (BFS.isReachable(RealTimeCollisionTile.get(playerPosition.getX(), playerPosition.getY(), playerPosition.getPlane()), RealTimeCollisionTile.get(pathFindingNode.getX(), pathFindingNode.getY(), pathFindingNode.getZ()), 49));
     }
 
-    public boolean clickMinimap(Positionable positionable){
-        final RSTile playerPosition = Player.getPosition();
-        if (playerPosition.distanceTo(positionable) <= 1){
-            return true;
-        }
-        Point point = Projection.tileToMinimap(positionable);
-        if (Projection.isInMinimap(point)){
-            Mouse.click(point, 1);
-            return true;
-        }
-        return false;
-    }
-
-
     public boolean clickMinimap(PathFindingNode pathFindingNode){
         final RSTile playerPosition = Player.getPosition();
         if (playerPosition.distanceTo(pathFindingNode.getRSTile()) <= 1){
@@ -254,6 +244,7 @@ public class WalkerEngine implements Loggable{
             log("Randomize is off the map, clicking normal instead.");
             point = Projection.tileToMinimap(new RSTile(pathFindingNode.getX(), pathFindingNode.getY(), pathFindingNode.getZ()));
         }
+
         final RSTile currentDestination = WaitFor.getValue(200, Game::getDestination);
         Mouse.click(point, 1);
         WaitFor.milliseconds(400);
@@ -305,9 +296,14 @@ public class WalkerEngine implements Loggable{
     }
 
     private boolean failedAttempt(){
-        attemptsForAction++;
+        if (Camera.getCameraAngle() < 90) {
+            Camera.setCameraAngle(General.random(90, 100));
+        }
+        if (++attemptsForAction > 1) {
+            Camera.setCameraRotation(General.random(0, 360));
+        }
         log("Failed attempt on action.");
-        WaitFor.milliseconds(1000, 2000);
+        WaitFor.milliseconds(350, 650);
         CollisionDataCollector.generateRealTimeCollision();
         return true;
     }
@@ -324,7 +320,8 @@ public class WalkerEngine implements Loggable{
             this.result = WalkingCondition.State.CONTINUE_WALKER;
         }
         public WalkingCondition.State trigger(){
-            return result = walkingCondition != null ? walkingCondition.action() : result;
+            result = (walkingCondition != null ? walkingCondition.action() : result);
+            return result != null ? result : WalkingCondition.State.CONTINUE_WALKER;
         }
         public WalkingCondition.State getResult() {
             return result;

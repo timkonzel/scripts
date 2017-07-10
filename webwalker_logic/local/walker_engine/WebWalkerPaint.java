@@ -9,6 +9,7 @@ import scripts.webwalker_logic.shared.NodeInfo;
 
 import java.awt.*;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
@@ -44,11 +45,15 @@ public class WebWalkerPaint {
     }
 
     public void drawDebug(Graphics graphics) {
-        drawDebug(graphics, null, true);
+        drawDebug(graphics, true);
     }
 
-
-    public void drawDebug(Graphics graphics, ArrayList<RSTile> path, boolean drawMap) {
+    /**
+     *
+     * @param graphics graphics variable from on paint method
+     * @param drawMap if you want to draw the map or not.
+     */
+    public void drawDebug(Graphics graphics, boolean drawMap) {
         if (!WalkerEngine.getInstance().isNavigating()){
             return;
         }
@@ -64,7 +69,7 @@ public class WebWalkerPaint {
                 nonDisplayableMapImageGraphics.setRenderingHints(new RenderingHints(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON));
 
                 int previousLocalX = -1, previousLocalY = -1;
-                nonDisplayableMapImageGraphics.setColor(new Color(0, 255, 23));
+                ArrayList<RSTile> path = WalkerEngine.getInstance().getCurrentPath();
                 if (path != null) {
                     for (RSTile node : path) {
                         int relativeX = node.getX() - playerX, relativeY = playerY - node.getY();
@@ -77,6 +82,22 @@ public class WebWalkerPaint {
                             previousLocalY = localY;
                             continue;
                         }
+
+                        switch (node.getPlane()){
+                            case 1:
+                                nonDisplayableMapImageGraphics.setColor(new Color(0, 224, 255));
+                                break;
+                            case 2:
+                                nonDisplayableMapImageGraphics.setColor(new Color(255, 115, 166));
+                                break;
+                            default:
+                                nonDisplayableMapImageGraphics.setColor(new Color(0, 255, 23));
+                        }
+
+                        if (Point2D.distance(previousLocalX, previousLocalY, localX, localY) > 20){
+                            nonDisplayableMapImageGraphics.setColor(new Color(233, 255, 224, 120));
+                        }
+
                         nonDisplayableMapImageGraphics.drawLine(previousLocalX + TILE_WIDTH / 2, previousLocalY + TILE_WIDTH / 2, localX + TILE_WIDTH / 2, localY + TILE_WIDTH / 2);
                         previousLocalX = localX;
                         previousLocalY = localY;
@@ -88,8 +109,8 @@ public class WebWalkerPaint {
 
                         int localX = (relativeX + REGION_SIZE / 2) * TILE_WIDTH, localY = (relativeY + REGION_SIZE / 2) * TILE_WIDTH;
 
-                        nonDisplayableMapImageGraphics.setColor(new Color(0, 0, 0, 32));
-                        nonDisplayableMapImageGraphics.drawRect(localX, localY, TILE_WIDTH, TILE_WIDTH);
+//                        nonDisplayableMapImageGraphics.setColor(new Color(0, 0, 0, 32));
+//                        nonDisplayableMapImageGraphics.drawRect(localX, localY, TILE_WIDTH, TILE_WIDTH);
 
                         nonDisplayableMapImageGraphics.setColor(new Color(255, 255, 255, 47));
                         nonDisplayableMapImageGraphics.fillRect(localX, localY, TILE_WIDTH, TILE_WIDTH);

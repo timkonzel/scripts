@@ -8,6 +8,7 @@ import org.tribot.api2007.types.*;
 import org.tribot.script.Script;
 import org.tribot.script.ScriptManifest;
 import org.tribot.script.interfaces.Painting;
+import scripts.webwalker_logic.WebWalker;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -53,6 +54,7 @@ public class DruidMaster9000 extends Script implements Painting {
     boolean killed = false;
     boolean animated = false;
     boolean needHop = false;
+    boolean HOPPING = false;
     int nullTimer = 0;
 
     int[] startLvls = new int[5];
@@ -90,6 +92,24 @@ public class DruidMaster9000 extends Script implements Painting {
         if (gui.natureBox.isSelected()) lootids.add(561);
         if (gui.boltBox.isSelected()) lootids.add(9142);
         if (gui.airBox.isSelected()) lootids.add(556);
+        if (gui.rareBox.isSelected()) {
+            //Uncut Sapphire
+            //Uncut emerald
+            //Uncut ruby
+            //Uncut diamond
+            //Dragonstone
+            //Runite Bar
+            //Silver ore
+            //loop half
+            //tooth half
+            //rune 2h
+            //rune b-axe
+            //rune kite
+            //d med
+            //rune spear
+            //shield left
+            //d spear
+        }
         int ind = lootids.size();
         if (ind > 0) {
             looting = true;
@@ -209,7 +229,7 @@ public class DruidMaster9000 extends Script implements Painting {
     }
 
     boolean needReturn() {
-        if (Player.getPosition().distanceTo(DRUID_LOC) > 6 || Player.getPosition().getY() > 9944 || Player.getPosition().getX() > 3128) return true;
+        if (Player.getPosition().distanceTo(DRUID_LOC) > 10) return true;
         return false;
     }
 
@@ -225,9 +245,21 @@ public class DruidMaster9000 extends Script implements Painting {
         if (npc == null) return false;
         RSTile pos = npc.getPosition();
         if (npc.isInCombat()) return false;
-        if (Player.getPosition().distanceTo(npc) > 8) return false;
+        if (Player.getPosition().distanceTo(npc) > 9) return false;
 
         return true;
+    }
+
+    boolean inBounds(RSTile loc) {
+        switch (LOCATION) {
+            case 1: // Tavelry
+                return true;
+            case 2: // Edgeville
+                if (loc.getY() <= 9944) return true;
+                return false;
+            default:
+                return false;
+        }
     }
 
     //GET FUNCTIONS
@@ -235,7 +267,7 @@ public class DruidMaster9000 extends Script implements Painting {
         RSTile me = Player.getPosition();
         RSGroundItem[] items = GroundItems.findNearest(LOOT);
         for (RSGroundItem item : items) {
-            if (item != null && me.distanceTo(item) < 7) return item;
+            if (item != null && me.distanceTo(item) < 7 && inBounds(item.getPosition())) return item;
         }
         return null;
     }
@@ -245,7 +277,7 @@ public class DruidMaster9000 extends Script implements Painting {
         RSCharacter atkr = getAttacker();
         if (atkr != null) return (RSNPC) atkr;
         for (RSNPC n : druids) {
-            if (canAttack(n) && n.getPosition().getY() <= 9944) return n;
+            if (canAttack(n) && inBounds(n.getPosition())) return n;
         }
         return null;
     }
@@ -254,10 +286,15 @@ public class DruidMaster9000 extends Script implements Painting {
         RSCharacter[] npcs = NPCs.findNearest(DRUID_IDS);
         RSCharacter me = Player.getRSPlayer();
 
+
         for (RSCharacter rsc : npcs) {
-            if (rsc != null && rsc.getInteractingCharacter() != null && rsc.getInteractingCharacter().equals(me) || rsc.isInteractingWithMe()) {
-                return rsc;
+            if (rsc != null) {
+                RSCharacter inter = rsc.getInteractingCharacter();
+                if (inter != null && inter.equals(me) || rsc.isInteractingWithMe()) {
+                    return rsc;
+                }
             }
+
         }
         return null;
     }
@@ -296,7 +333,7 @@ public class DruidMaster9000 extends Script implements Painting {
                 teleportOut();
                 sleep(3000);
             }
-            WebWalking.walkTo(BANK_TILE);
+            WebWalker.walkTo(BANK_TILE);
             sleep(1000,2000);
 
         }
@@ -310,12 +347,12 @@ public class DruidMaster9000 extends Script implements Painting {
         if (Banking.isBankScreenOpen()) {
             Banking.depositAll();
             sleep(500,1000);
-            if (FOOD_ID != -1 && Inventory.getCount(FOOD_ID) == 0)
-                Banking.withdraw(FOOD_AMT, FOOD_ID);
             if (needTeleportOut())
                 Banking.withdraw(1, TELEPORT_OUT_ID);
             if (needTeleportIn())
                 Banking.withdraw(1, TELEPORT_IN_ID);
+            if (FOOD_ID != -1 && Inventory.getCount(FOOD_ID) == 0)
+                Banking.withdraw(FOOD_AMT, FOOD_ID);
             sleep(1000, 1000);
             manualBank = false;
         }
@@ -324,7 +361,7 @@ public class DruidMaster9000 extends Script implements Painting {
             Banking.close();
         }
 
-        if (needHop) {
+        if (needHop && HOPPING) {
             println("hopping world to avoid pkers");
             WorldHopper.changeWorld(WorldHopper.getRandomWorld(true));
             needHop = false;
@@ -564,88 +601,18 @@ public class DruidMaster9000 extends Script implements Painting {
         }
     }
 
-    RSTile ladderTop = new RSTile(3094, 3472,0 );
 
-    boolean inDungeon() {
-        if (Player.getPosition().getY() > 9000) return true;
-        return false;
-    }
     long ladder = 0;
     void walkBack() {
         if (!needTeleportIn()) {
             teleportIn();
         }
 
-        if (LOCATION == 2) {
-            if (!inDungeon()) {
-                if (Player.getPosition().distanceTo(ladderTop) > 6 && System.currentTimeMillis() - ladder < 10000)  {
-                    println("Walking to ladder");
-                    WebWalking.walkTo(ladderTop);
-                }
-
-                RSObject[] closed = Objects.findNearest(8, 1579);
-                if (closed != null && closed.length > 0) {
-                    if (closed[0] != null) {
-                        println("opening trapdoor");
-                        closed[0].click("Open Trapdoor");
-                        sleep(150);
-                    }
-                }
-                RSObject[] open = Objects.findNearest(8, 1581);
-                if (open != null && open.length > 0) {
-                    if (open[0] != null) {
-                        println("climbing down trapdoor");
-                        open[0].click("Climb-down Trapdoor");
-                        sleep(500);
-                        ladder = System.currentTimeMillis();
-                    }
-                }
-            }
-            if (inDungeon() || System.currentTimeMillis() - ladder < 7000){
-                RSTile pos = Player.getPosition();
-                if (pos.getY() < 9903) {
-                    WebWalking.walkTo(new RSTile(3097, 9909));
-                    pos = Player.getPosition();
-                }
-                if (pos.getY() > 9908 && pos.getY() < 9918 && pos.getX() < 3128) {
-                    WebWalking.walkTo(new RSTile(3132, 9914));
-                    pos = Player.getPosition();
-                }
-                if (pos.getY() <= 9917 && pos.getX() > 3128) {
-                    RSObject[] closed = Objects.find(6, 1727);
-                    if (closed != null && closed.length > 0) {
-                        if (closed[0] != null) {
-                            println("Opening Gate");
-                            closed[0].click("Open Gate");
-                            sleep(250);
-                            pos = Player.getPosition();
-                        }
-                    }
-                    pos = Player.getPosition();
-                }
-                if (pos.getY() >= 9918 && pos.getY() <= 9925 && pos.getX() > 3128) {
-                    Walking.walkTo(new RSTile(3132, 9929));
-                    sleep(250);
-                    pos = Player.getPosition();
-                }
-                if (pos.getY() > 9925 && pos.getX() > 3128) {
-                    Walking.walkTo(new RSTile(3128, 9929));
-                    sleep(100);
-                }
-
-                if (pos.getY() > 9925 && pos.getX() <= 3128) {
-                    Walking.walkTo(DRUID_LOC);
-                    sleep(100);
-                }
-            }
-        } else {
-            Camera.setCameraRotation(270);
-            Camera.setCameraAngle(100);
-            WebWalking.walkTo(DRUID_LOC);
-            sleep(200);
+        Camera.setCameraRotation(270);
+        Camera.setCameraAngle(100);
+        WebWalker.walkTo(DRUID_LOC);
+        sleep(200);
         }
-
-    }
 
     void teleportIn() {
         if(TELEPORT_IN_ID == 12781) {
@@ -792,7 +759,7 @@ public class DruidMaster9000 extends Script implements Painting {
             graphics.drawString(xpg + " ("+df2.format(xpg/hoursRan)+" P/H)", 186, 462);
             graphics.drawString(getLootTotal() + " ("+ df2.format(getLootTotal()/hoursRan)+" P/H)", 186, 487);
             graphics.drawString("State: " + sState(), 370, 330);
-            graphics.setColor(Color.orange);
+           /* graphics.setColor(Color.orange);
             RSCharacter attacker = getAttacker();
             if (attacker != null) {
                 Point pt = attacker.getAnimablePosition().getHumanHoverPoint();
@@ -803,7 +770,7 @@ public class DruidMaster9000 extends Script implements Painting {
             if (targ != null) {
                 Point pt = targ.getAnimablePosition().getHumanHoverPoint();
                 graphics.drawRect(pt.x,pt.y,20,20);
-            }
+            }*/
         }
     }
 }
